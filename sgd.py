@@ -47,6 +47,17 @@ class Layer(object):
         self.feed_forward(np.zeros(input_dim))
 
     def feed_forward(self, x):
+        """Apply an input vector and compute our output activation.
+
+        Saves the intermediate affine computation for later; we use
+        this in the backpropagation step. (We could just compute it
+        again, so this is only to save time.)
+
+        Args:
+            x: shape (input_dim,)
+        Returns:
+            shape (output_dim,)
+        """
         self.x = x
         self.affine_output = np.dot(self.w, x) + self.b
         self.output = self.activation(self.affine_output)
@@ -61,7 +72,10 @@ class Layer(object):
 
         Args:
             partial_output: partial derivative of the loss with respect
-                to our activation (dL / dh)
+                to our activation (dL / dh). Shape (output_dim,)
+        Returns:
+            partial derivative of the loss with respect to our input
+            (dL / dx). Shape (input_dim,)
         """
         # This vector shows up in all 3 partial computations.
         error = partial_output * self.activation.derivative(self.affine_output)
