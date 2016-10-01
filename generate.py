@@ -18,14 +18,17 @@ def f(x, y):
     return z
 
 
-def draw():
+def draw(filename=None):
     y, x = np.mgrid[-1:1:100j, -1:1:100j]
     z = f(x, y)
     z -= np.min(z)
     z /= np.max(z)
 
     cs = plt.contourf(x, y, z, np.arange(0, 1.1, 0.01), cmap=cm.viridis)
-    plt.show()
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
 
 
 def sample(n):
@@ -36,7 +39,7 @@ def sample(n):
 
 
 if __name__ == '__main__':
-    draw()
+    draw('target.png')
     #X, y = sample(200000)
     #np.save('x.npy', X)
     #np.save('y.npy', y)

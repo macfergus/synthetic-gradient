@@ -77,7 +77,16 @@ class Layer(object):
             partial derivative of the loss with respect to our input
             (dL / dx). Shape (input_dim,)
         """
-        # This vector shows up in all 3 partial computations.
+        # Notation:
+        # x is our input
+        # h is our output
+        # w is weight matrix, b is bias vector
+        # sigma is our activation function (doesn't have to be sigmoid) so:
+        # h = sigma(wx + b)
+        # L is the loss
+
+        # This vector shows up in all 3 partial computations, so we'll
+        # compute it once here.
         error = partial_output * self.activation.derivative(self.affine_output)
 
         # dL / dw = (dL / dh) * (dh / dw)
@@ -163,20 +172,29 @@ def main():
             if (j + 1) % 5000 == 0:
                 sys.stdout.write('*')
                 sys.stdout.flush()
+
             x = X[j]
             expected = y[j]
+
+            # Compute the predicted value for x.
             h1 = layer1.feed_forward(x)
             h2 = layer2.feed_forward(h1)
             h3 = layer3.feed_forward(h2)
             output = h3[0]
+
+            # Find the error.
             delta = output - expected
-            cost_contribution = (delta * delta) / 2.
-            sum_squares += cost_contribution
-            cost_derivative = output - expected
+            loss_contribution = (delta * delta) / 2.
+            sum_squares += loss_contribution
+            loss_derivative = delta
+
+            # Backpropagate the loss derivative.
             partials3 = layer3.backprop(np.array([delta]))
             partials2 = layer2.backprop(partials3)
             layer1.backprop(partials2)
 
+            # Update weights according to the gradient we just
+            # calculated.
             layer3.descend(learning_rate)
             layer2.descend(learning_rate)
             layer1.descend(learning_rate)
