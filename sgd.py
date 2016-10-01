@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 
@@ -96,9 +97,9 @@ def save_graph(layers, output_file):
         h3 = layers[2].feed_forward(h2)
         return h3[0]
     X, Y, Z = [], [], []
-    ys = np.linspace(-1, 1, num=50)
+    ys = np.linspace(-1, 1, num=100)
     for y in ys:
-        xs = np.linspace(-1, 1, num=300)
+        xs = np.linspace(-1, 1, num=100)
         zs = []
         for x in xs:
             zs.append(predict(x, y))
@@ -116,20 +117,31 @@ def save_graph(layers, output_file):
 
 
 def main():
-    X = np.load('x.npy')
-    y = np.load('y.npy')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num-epochs', type=int, default=100)
+    parser.add_argument('--learning-rate', type=float, default=0.002)
+    parser.add_argument('--plots-dir', default='sgd_plots')
+    parser.add_argument('training_inputs')
+    parser.add_argument('training_outputs')
+    args = parser.parse_args()
+
+    X = np.load(args.training_inputs)
+    y = np.load(args.training_outputs)
+
+    plot_template = os.path.join(args.plots_dir, 'epoch_%03d.png')
+    def plot_file(epoch):
+        return plot_template % (epoch,)
 
     layer1 = Layer(2, 24, Sigmoid())
     layer2 = Layer(24, 12, Sigmoid())
     layer3 = Layer(12, 1, Linear())
 
-    num_epochs = 100
-    learning_rate = 0.002
+    learning_rate = args.learning_rate
     num_examples = X.shape[0]
 
-    save_graph([layer1, layer2, layer3], 'my_sgd_plots/epoch_000.png')
+    save_graph([layer1, layer2, layer3], plot_file(0))
 
-    for i in range(num_epochs):
+    for i in range(args.num_epochs):
         print 'Epoch %d...' % (i + 1,)
         sum_squares = 0.0
         start = time.time()
@@ -155,10 +167,10 @@ def main():
             layer2.descend(learning_rate)
             layer1.descend(learning_rate)
         elapsed = time.time() - start
-        learning_rate *= 0.995
+        learning_rate *= 0.997
         mse = sum_squares / num_examples
         print ' complete (%.1f seconds). MSE %.06f' % (elapsed, mse,)
-        save_graph([layer1, layer2, layer3], 'my_sgd_plots/epoch_%03d.png' % (i + 1,))
+        save_graph([layer1, layer2, layer3], plot_file(i + 1))
 
 
 if __name__ == '__main__':
