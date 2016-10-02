@@ -42,7 +42,7 @@ class TrainingThread(threading.Thread):
         self.layer2 = sgd.Layer(24, 12, sgd.Sigmoid())
         self.layer3 = sgd.Layer(12, 1, sgd.Linear())
         self.learning_rate = 0.001
-
+        self.oracle_client = synthgrad.OracleClient('http://localhost:5001')
 
     def run(self):
         while True:
@@ -68,6 +68,8 @@ class TrainingThread(threading.Thread):
         partials2 = self.layer2.backprop(partials3)
         self.layer3.descend(self.learning_rate)
         self.layer2.descend(self.learning_rate)
+
+        self.oracle_client.provide_gradient(x, partials2)
 
         if self.error_collector.count > 1000:
             print 'Average loss over last 1000 examples: %.6f' % (

@@ -40,3 +40,10 @@ class OracleClient(object):
             self.base_url + '/estimate_gradient', json=payload)
         gradient = json_to_ndarray(response.json()['gradient'])
         return gradient
+
+    def provide_gradient(self, activation, gradient):
+        payload = {
+            'h': ndarray_to_json(activation),
+            'gradient': ndarray_to_json(gradient),
+        }
+        requests.post(self.base_url + '/provide_gradient', json=payload)
