@@ -69,10 +69,10 @@ class TrainingThread(threading.Thread):
         self.layer3.descend(self.learning_rate)
         self.layer2.descend(self.learning_rate)
 
-        self.oracle_client.provide_gradient(x, partials2)
+        self.oracle_client.provide_gradient(0, x, partials2)
 
-        if self.error_collector.count > 1000:
-            print 'Average loss over last 1000 examples: %.6f' % (
+        if self.error_collector.count > 2000:
+            print 'Average loss over last 2000 examples: %.6f' % (
                 self.error_collector.mse(),)
             self.error_collector.reset()
 

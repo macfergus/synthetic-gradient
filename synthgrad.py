@@ -7,7 +7,7 @@ import requests
 def ndarray_to_json(ndarray):
     return {
         'shape': ndarray.shape,
-        'values': list(ndarray.flatten()),
+        'values': [float(x) for x in ndarray.flatten()],
     }
 
 
@@ -20,8 +20,9 @@ class LayerClient(object):
     def __init__(self, base_url):
         self.base_url = base_url
 
-    def provide_training_example(self, x, y):
+    def provide_training_example(self, i, x, y):
         payload = {
+            'i': i,
             'x': ndarray_to_json(x),
             'y': ndarray_to_json(y),
         }
@@ -41,8 +42,9 @@ class OracleClient(object):
         gradient = json_to_ndarray(response.json()['gradient'])
         return gradient
 
-    def provide_gradient(self, activation, gradient):
+    def provide_gradient(self, i, activation, gradient):
         payload = {
+            'i': i,
             'h': ndarray_to_json(activation),
             'gradient': ndarray_to_json(gradient),
         }

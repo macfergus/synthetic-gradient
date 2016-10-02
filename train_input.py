@@ -40,11 +40,10 @@ def main():
             h1 = layer1.feed_forward(x)
             # Fire and forget.
             thread.start_new_thread(
-                front_client.provide_training_example, (h1, expected))
+                front_client.provide_training_example, (j, h1, expected))
 
             # Block until we get a gradient.
-            #gradient = oracle_client.estimate_gradient(h1)
-            gradient = np.zeros(24)
+            gradient = oracle_client.estimate_gradient(h1)
             layer1.backprop(gradient)
             layer1.descend(args.learning_rate)
         elapsed = time.time() - start
