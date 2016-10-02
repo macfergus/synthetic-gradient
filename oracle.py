@@ -75,9 +75,10 @@ def estimate_gradient():
 @app.route('/provide_gradient', methods=['POST'])
 def provide_gradient():
     payload = request.json
-    activation = synthgrad.json_to_ndarray(payload['h'])
-    gradient = synthgrad.json_to_ndarray(payload['gradient'])
-    training_queue.put((payload['i'], activation, gradient))
+    for example in payload:
+        activation = synthgrad.json_to_ndarray(example['h'])
+        gradient = synthgrad.json_to_ndarray(example['gradient'])
+        training_queue.put((example['i'], activation, gradient))
     return jsonify(ok=True)
 
 

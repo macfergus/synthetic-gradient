@@ -48,6 +48,7 @@ def train_forever(q):
         print "Training on %d examples..." % (num_examples,)
         sum_squares = 0.0
         start = time.time()
+        batch = []
         for j in range(num_examples):
             index = indices[j]
             x = X[j]
@@ -68,7 +69,10 @@ def train_forever(q):
             layer3.descend(learning_rate)
             layer2.descend(learning_rate)
 
-            oracle_client.provide_gradient(index, x, partials2)
+            batch.append((index, x, partials2))
+            if len(batch) >= 100:
+                oracle_client.provide_gradients(batch)
+                batch = []
         mse = sum_squares / float(num_examples)
         elapsed = time.time() - start
         print "MSE %.06f; took %.1f seconds" % (mse, elapsed)
@@ -77,10 +81,11 @@ def train_forever(q):
 @app.route('/training_example', methods=['POST'])
 def training_example():
     payload = request.json
-    x = synthgrad.json_to_ndarray(payload['x'])
-    y = synthgrad.json_to_ndarray(payload['y'])
+    for example in payload:
+        x = synthgrad.json_to_ndarray(example['x'])
+        y = synthgrad.json_to_ndarray(example['y'])
 
-    current_app.q.put((payload['i'], x, y))
+        current_app.q.put((example['i'], x, y))
 
     return jsonify(ok=True)
 

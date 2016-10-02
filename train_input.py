@@ -28,6 +28,7 @@ def main():
     front_client = synthgrad.LayerClient(args.output_server)
     oracle_client = synthgrad.OracleClient(args.oracle_server)
 
+    batch = []
     for i in range(args.num_epochs):
         print 'Epoch %d...' % (i + 1,)
         start = time.time()
@@ -38,9 +39,11 @@ def main():
             x = X[j]
             expected = y[j]
             h1 = layer1.feed_forward(x)
-            # Fire and forget.
-            thread.start_new_thread(
-                front_client.provide_training_example, (j, h1, expected))
+
+            batch.append((j, h1, expected))
+            if len(batch) > 100:
+                front_client.provide_training_examples(batch)
+                batch = []
 
             # Block until we get a gradient.
             gradient = oracle_client.estimate_gradient(h1)

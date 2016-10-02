@@ -24,12 +24,12 @@ class LayerClient(object):
         self.session = requests.Session()
         self.session.trust_env = False
 
-    def provide_training_example(self, i, x, y):
-        payload = {
+    def provide_training_examples(self, batch):
+        payload = [{
             'i': i,
             'x': ndarray_to_json(x),
             'y': ndarray_to_json(y),
-        }
+        } for i, x, y in batch]
         self.session.post(self.base_url + '/training_example', json=payload)
 
 
@@ -48,10 +48,11 @@ class OracleClient(object):
         gradient = json_to_ndarray(response.json()['gradient'])
         return gradient
 
-    def provide_gradient(self, i, activation, gradient):
-        payload = {
-            'i': i,
-            'h': ndarray_to_json(activation),
-            'gradient': ndarray_to_json(gradient),
-        }
+    def provide_gradients(self, batch):
+        payload = [
+            {
+                'i': i,
+                'h': ndarray_to_json(activation),
+                'gradient': ndarray_to_json(gradient),
+            } for i, activation, gradient in batch]
         self.session.post(self.base_url + '/provide_gradient', json=payload)
