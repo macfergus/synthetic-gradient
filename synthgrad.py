@@ -25,8 +25,7 @@ class LayerClient(object):
             'x': ndarray_to_json(x),
             'y': ndarray_to_json(y),
         }
-        response = requests.post(self.base_url + '/training_example', json=payload)
-        return json_to_ndarray(response.json()['gradient'])
+        requests.post(self.base_url + '/training_example', json=payload)
 
 
 class OracleClient(object):
