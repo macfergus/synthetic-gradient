@@ -1,7 +1,9 @@
 import json
+import logging
 
 import numpy as np
 import requests
+
 
 
 def ndarray_to_json(ndarray):
@@ -19,6 +21,8 @@ def json_to_ndarray(ndarray_as_json):
 class LayerClient(object):
     def __init__(self, base_url):
         self.base_url = base_url
+        self.session = requests.Session()
+        self.session.trust_env = False
 
     def provide_training_example(self, i, x, y):
         payload = {
@@ -26,18 +30,20 @@ class LayerClient(object):
             'x': ndarray_to_json(x),
             'y': ndarray_to_json(y),
         }
-        requests.post(self.base_url + '/training_example', json=payload)
+        self.session.post(self.base_url + '/training_example', json=payload)
 
 
 class OracleClient(object):
     def __init__(self, base_url):
         self.base_url = base_url
+        self.session = requests.Session()
+        self.session.trust_env = False
 
     def estimate_gradient(self, activation):
         payload = {
             'h': ndarray_to_json(activation),
         }
-        response = requests.post(
+        response = self.session.post(
             self.base_url + '/estimate_gradient', json=payload)
         gradient = json_to_ndarray(response.json()['gradient'])
         return gradient
@@ -48,4 +54,4 @@ class OracleClient(object):
             'h': ndarray_to_json(activation),
             'gradient': ndarray_to_json(gradient),
         }
-        requests.post(self.base_url + '/provide_gradient', json=payload)
+        self.session.post(self.base_url + '/provide_gradient', json=payload)

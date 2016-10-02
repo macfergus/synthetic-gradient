@@ -1,9 +1,10 @@
 import logging
-import Queue
-import threading
+import thread
+import time
+from multiprocessing import Process, Queue
 
 import numpy as np
-from flask import Flask, jsonify, request
+from flask import Flask, current_app, jsonify, request
 
 import sgd
 import synthgrad
@@ -12,72 +13,65 @@ app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-STOP = object()
 
-class ErrorCollector(object):
-    def __init__(self):
-        self.reset()
+def train_forever(q):
+    layer2 = sgd.Layer(24, 12, sgd.Sigmoid())
+    layer3 = sgd.Layer(12, 1, sgd.Linear())
+    learning_rate = 0.001
+    oracle_client = synthgrad.OracleClient('http://127.0.0.1:5001')
 
-    def record_loss(self, loss_contribution):
-        self.sum_squares += loss_contribution
-        self.num_examples += 1
+    examples = {}
 
-    def mse(self):
-        return self.sum_squares / float(self.num_examples)
-
-    def reset(self):
-        self.sum_squares = 0
-        self.num_examples = 0
-
-    @property
-    def count(self):
-        return self.num_examples
-
-
-class TrainingThread(threading.Thread):
-    def __init__(self, queue):
-        super(TrainingThread, self).__init__()
-        self.q = queue
-        self.error_collector = ErrorCollector()
-        self.layer2 = sgd.Layer(24, 12, sgd.Sigmoid())
-        self.layer3 = sgd.Layer(12, 1, sgd.Linear())
-        self.learning_rate = 0.001
-        self.oracle_client = synthgrad.OracleClient('http://localhost:5001')
-
-    def run(self):
-        while True:
-            pair = self.q.get()
-            if pair is STOP:
+    while True:
+        while not q.empty():
+            try:
+                item = q.get(block=False)
+            except Queue.Empty:
+                break
+            if item is None:
                 return
-            x, y = pair
-            self.train(x, y)
+            i, x, y = item
+            examples[i] = (x, y)
+        if len(examples) == 0:
+            time.sleep(1)
+            continue
 
-    def train(self, x, y):
-        h2 = self.layer2.feed_forward(x)
-        h3 = self.layer3.feed_forward(h2)
-        output = h3[0]
+        indices, X, y = [], [], []
+        for i, (h, grad) in examples.items():
+            indices.append(i)
+            X.append(h)
+            y.append(grad)
+        X = np.array(X)
+        y = np.array(y)
 
-        # Find the error.
-        delta = output - y
-        loss_contribution = (delta * delta) / 2.
-        loss_derivative = delta
+        num_examples = X.shape[0]
+        print "Training on %d examples..." % (num_examples,)
+        sum_squares = 0.0
+        start = time.time()
+        for j in range(num_examples):
+            index = indices[j]
+            x = X[j]
+            target = y[j]
 
-        self.error_collector.record_loss(loss_contribution)
+            h2 = layer2.feed_forward(x)
+            h3 = layer3.feed_forward(h2)
+            output = h3[0]
 
-        partials3 = self.layer3.backprop(np.array([loss_derivative]))
-        partials2 = self.layer2.backprop(partials3)
-        self.layer3.descend(self.learning_rate)
-        self.layer2.descend(self.learning_rate)
+            # Find the error.
+            delta = output - target
+            loss_contribution = (delta * delta) / 2.
+            loss_derivative = delta
+            sum_squares += loss_contribution
 
-        self.oracle_client.provide_gradient(0, x, partials2)
+            partials3 = layer3.backprop(np.array([loss_derivative]))
+            partials2 = layer2.backprop(partials3)
+            layer3.descend(learning_rate)
+            layer2.descend(learning_rate)
 
-        if self.error_collector.count > 2000:
-            print 'Average loss over last 2000 examples: %.6f' % (
-                self.error_collector.mse(),)
-            self.error_collector.reset()
-
-
-training_queue = Queue.Queue()
+            oracle_client.provide_gradient(index, x, partials2)
+        mse = sum_squares / float(num_examples)
+        elapsed = time.time() - start
+        print "MSE %.06f; took %.1f seconds" % (mse, elapsed)
 
 
 @app.route('/training_example', methods=['POST'])
@@ -86,16 +80,20 @@ def training_example():
     x = synthgrad.json_to_ndarray(payload['x'])
     y = synthgrad.json_to_ndarray(payload['y'])
 
-    training_queue.put((x, y))
+    current_app.q.put((payload['i'], x, y))
 
     return jsonify(ok=True)
 
 
 if __name__ == '__main__':
-    training_thread = TrainingThread(training_queue)
-    training_thread.start()
+    training_queue = Queue()
+    with app.app_context():
+        current_app.q = training_queue
+
+    trainer_proc = Process(target=train_forever, args=(training_queue,))
+    trainer_proc.start()
     try:
-        app.run('localhost', 5000, debug=True)
+        app.run('localhost', 5000, debug=False)
     finally:
-        training_queue.put(STOP)
-        training_thread.join()
+        training_queue.put(None)
+        trainer_proc.join()
