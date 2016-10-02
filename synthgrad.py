@@ -22,6 +22,8 @@ class LayerClient(object):
     def __init__(self, base_url):
         self.base_url = base_url
         self.session = requests.Session()
+        # Disable proxies to circumvent a bug with multiprocessing on
+        # Mac OS.
         self.session.trust_env = False
 
     def provide_training_examples(self, batch):
@@ -37,6 +39,8 @@ class OracleClient(object):
     def __init__(self, base_url):
         self.base_url = base_url
         self.session = requests.Session()
+        # Disable proxies to circumvent a bug with multiprocessing on
+        # Mac OS.
         self.session.trust_env = False
 
     def estimate_gradient(self, activation):

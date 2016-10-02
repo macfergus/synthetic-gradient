@@ -1,5 +1,6 @@
 import argparse
-import thread
+import Queue
+import threading
 import time
 import sys
 
@@ -7,6 +8,38 @@ import sgd
 import synthgrad
 
 import numpy as np
+
+
+class Sender(threading.Thread):
+    def __init__(self, q, client):
+        super(Sender, self).__init__()
+        self.q = q
+        self.client = client
+
+    def run(self):
+        while True:
+            batch = []
+            while not self.q.empty():
+                try:
+                    item = self.q.get(block=False)
+                    if item is None:
+                        return
+                    batch.append(item)
+                except Queue.Empty:
+                    break
+            if not batch:
+                time.sleep(1)
+                continue
+            # Dedupe results. We may have computed the same example
+            # multiple times.
+            batch = {i: (i, x, y) for i, x, y in batch}.values()
+            while batch:
+                # Send in 500-example chunks.
+                cur, batch = batch[:500], batch[500:]
+                try:
+                    self.client.provide_training_examples(cur)
+                except Exception:
+                    print "Exception sending chunk; discarding."
 
 
 def main():
@@ -28,29 +61,34 @@ def main():
     front_client = synthgrad.LayerClient(args.output_server)
     oracle_client = synthgrad.OracleClient(args.oracle_server)
 
-    batch = []
-    for i in range(args.num_epochs):
-        print 'Epoch %d...' % (i + 1,)
-        start = time.time()
-        for j in range(num_examples):
-            if (j + 1) % 5000 == 0:
-                sys.stdout.write('*')
-                sys.stdout.flush()
-            x = X[j]
-            expected = y[j]
-            h1 = layer1.feed_forward(x)
+    send_q = Queue.Queue()
+    sender = Sender(send_q, front_client)
+    sender.start()
 
-            batch.append((j, h1, expected))
-            if len(batch) > 100:
-                front_client.provide_training_examples(batch)
-                batch = []
+    try:
+        for i in range(args.num_epochs):
+            print 'Epoch %d...' % (i + 1,)
+            start = time.time()
+            for j in range(num_examples):
+                if (j + 1) % 5000 == 0:
+                    sys.stdout.write('*')
+                    sys.stdout.flush()
+                x = X[j]
+                expected = y[j]
+                h1 = layer1.feed_forward(x)
 
-            # Block until we get a gradient.
-            gradient = oracle_client.estimate_gradient(h1)
-            layer1.backprop(gradient)
-            layer1.descend(args.learning_rate)
-        elapsed = time.time() - start
-        print ' complete (%.1f seconds).'
+                # Hand the example off to the other half of the network.
+                send_q.put((j, h1, expected))
+
+                # Block until we get a gradient.
+                gradient = oracle_client.estimate_gradient(h1)
+                layer1.backprop(gradient)
+                layer1.descend(args.learning_rate)
+            elapsed = time.time() - start
+            print ' complete (%.1f seconds).' % (elapsed,)
+    finally:
+        send_q.put(None)
+        sender.join()
 
 
 if __name__ == '__main__':

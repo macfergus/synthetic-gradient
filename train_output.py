@@ -1,7 +1,9 @@
 import logging
-import thread
+import Queue
+import threading
 import time
-from multiprocessing import Process, Queue
+from multiprocessing import Process
+from multiprocessing import Queue as PQueue
 
 import numpy as np
 from flask import Flask, current_app, jsonify, request
@@ -14,11 +16,47 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 
+class Sender(threading.Thread):
+    def __init__(self, q, client):
+        super(Sender, self).__init__()
+        self.q = q
+        self.client = client
+
+    def run(self):
+        while True:
+            batch = []
+            while not self.q.empty():
+                try:
+                    item = self.q.get(block=False)
+                    if item is None:
+                        return
+                    batch.append(item)
+                except Queue.Empty:
+                    break
+            if not batch:
+                time.sleep(1)
+                continue
+            # Dedupe results. We may have computed the same example
+            # multiple times.
+            batch = {i: (i, h, grad) for i, h, grad in batch}.values()
+            while batch:
+                # Send in 500-example chunks.
+                cur, batch = batch[:500], batch[500:]
+                try:
+                    self.client.provide_gradients(cur)
+                except Exception:
+                    print "Exception sending chunk; discarding."
+
+
 def train_forever(q):
     layer2 = sgd.Layer(24, 12, sgd.Sigmoid())
     layer3 = sgd.Layer(12, 1, sgd.Linear())
     learning_rate = 0.001
     oracle_client = synthgrad.OracleClient('http://127.0.0.1:5001')
+
+    send_q = Queue.Queue()
+    sender = Sender(send_q, oracle_client)
+    sender.start()
 
     examples = {}
 
@@ -29,6 +67,8 @@ def train_forever(q):
             except Queue.Empty:
                 break
             if item is None:
+                send_q.put(None)
+                sender.join()
                 return
             i, x, y = item
             examples[i] = (x, y)
@@ -69,10 +109,7 @@ def train_forever(q):
             layer3.descend(learning_rate)
             layer2.descend(learning_rate)
 
-            batch.append((index, x, partials2))
-            if len(batch) >= 100:
-                oracle_client.provide_gradients(batch)
-                batch = []
+            send_q.put((index, x, partials2))
         mse = sum_squares / float(num_examples)
         elapsed = time.time() - start
         print "MSE %.06f; took %.1f seconds" % (mse, elapsed)
@@ -91,7 +128,7 @@ def training_example():
 
 
 if __name__ == '__main__':
-    training_queue = Queue()
+    training_queue = PQueue()
     with app.app_context():
         current_app.q = training_queue
 
