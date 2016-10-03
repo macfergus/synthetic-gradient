@@ -1,5 +1,6 @@
 import logging
 import Queue
+import random
 import threading
 import time
 from multiprocessing import Process
@@ -39,6 +40,9 @@ class Sender(threading.Thread):
             # Dedupe results. We may have computed the same example
             # multiple times.
             batch = {i: (i, h, grad) for i, h, grad in batch}.values()
+            if len(batch) > 5000:
+                print "Reducing batch from %d to 5000" % (len(batch),)
+                batch = random.sample(batch, 5000)
             while batch:
                 # Send in 500-example chunks.
                 cur, batch = batch[:500], batch[500:]
@@ -113,6 +117,8 @@ def train_forever(q):
         mse = sum_squares / float(num_examples)
         elapsed = time.time() - start
         print "MSE %.06f; took %.1f seconds" % (mse, elapsed)
+        # Give the worker thread a chance to do stuff.
+        time.sleep(0.05)
 
 
 @app.route('/training_example', methods=['POST'])

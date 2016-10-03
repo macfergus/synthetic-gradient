@@ -61,15 +61,15 @@ def train_forever(q):
         shared_weights[:] = model.get_weights()
 
 
-@app.route('/estimate_gradient', methods=['POST'])
-def estimate_gradient():
+@app.route('/estimate_gradients', methods=['POST'])
+def estimate_gradients():
     payload = request.json
-    activation = synthgrad.json_to_ndarray(payload['h'])
     if shared_weights:
         predict_model.set_weights(shared_weights)
-    predictions = predict_model.predict(np.array([activation]))
-    gradient = predictions[0]
-    return jsonify(gradient=synthgrad.ndarray_to_json(gradient))
+    activations = [synthgrad.json_to_ndarray(h)
+                   for h in payload['activations']]
+    predictions = predict_model.predict(np.array(activations))
+    return jsonify(gradients=synthgrad.ndarray_to_json(predictions))
 
 
 @app.route('/provide_gradient', methods=['POST'])

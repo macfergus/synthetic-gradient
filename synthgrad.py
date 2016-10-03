@@ -43,14 +43,14 @@ class OracleClient(object):
         # Mac OS.
         self.session.trust_env = False
 
-    def estimate_gradient(self, activation):
+    def estimate_gradients(self, activations):
         payload = {
-            'h': ndarray_to_json(activation),
+            'activations': [ndarray_to_json(h) for h in activations],
         }
         response = self.session.post(
-            self.base_url + '/estimate_gradient', json=payload)
-        gradient = json_to_ndarray(response.json()['gradient'])
-        return gradient
+            self.base_url + '/estimate_gradients', json=payload)
+        gradients = json_to_ndarray(response.json()['gradients'])
+        return gradients
 
     def provide_gradients(self, batch):
         payload = [

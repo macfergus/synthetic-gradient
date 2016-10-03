@@ -1,8 +1,9 @@
 import argparse
 import Queue
+import random
+import sys
 import threading
 import time
-import sys
 
 import sgd
 import synthgrad
@@ -33,6 +34,8 @@ class Sender(threading.Thread):
             # Dedupe results. We may have computed the same example
             # multiple times.
             batch = {i: (i, x, y) for i, x, y in batch}.values()
+            if len(batch) > 2000:
+                batch = random.sample(batch, 2000)
             while batch:
                 # Send in 500-example chunks.
                 cur, batch = batch[:500], batch[500:]
@@ -65,10 +68,13 @@ def main():
     sender = Sender(send_q, front_client)
     sender.start()
 
+    minibatch_size = 10
+
     try:
         for i in range(args.num_epochs):
             print 'Epoch %d...' % (i + 1,)
             start = time.time()
+            minibatch = []
             for j in range(num_examples):
                 if (j + 1) % 5000 == 0:
                     sys.stdout.write('*')
@@ -80,10 +86,16 @@ def main():
                 # Hand the example off to the other half of the network.
                 send_q.put((j, h1, expected))
 
-                # Block until we get a gradient.
-                gradient = oracle_client.estimate_gradient(h1)
-                layer1.backprop(gradient)
-                layer1.descend(args.learning_rate)
+                minibatch.append(h1)
+
+                if len(minibatch) == minibatch_size:
+                    gradients = oracle_client.estimate_gradients(minibatch)
+                    # Average the gradients over our minibatch.
+                    gradient = np.sum(gradients, axis=0)
+                    gradient /= float(minibatch_size)
+                    layer1.backprop(gradient)
+                    layer1.descend(args.learning_rate)
+                    minibatch = []
             elapsed = time.time() - start
             print ' complete (%.1f seconds).' % (elapsed,)
     finally:
