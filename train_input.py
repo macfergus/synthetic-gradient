@@ -77,6 +77,7 @@ def main():
 
     minibatch_size = 10
 
+    last_save = time.time()
     try:
         for i in range(args.num_epochs):
             print 'Epoch %d...' % (i + 1,)
@@ -104,8 +105,10 @@ def main():
                     layer1.descend(args.learning_rate)
                     minibatch = []
 
-                    now = int(time.time())
-                    if now % 100 == 0:
+                    now = time.time()
+                    if now - last_save > 99:
+                        last_save = now
+                        now = 100 * int(last_save / 100)
                         save_weights(layer1, now)
             elapsed = time.time() - start
             print ' complete (%.1f seconds).' % (elapsed,)
