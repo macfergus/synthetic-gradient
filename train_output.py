@@ -1,5 +1,6 @@
 import logging
 import Queue
+import os
 import random
 import threading
 import time
@@ -15,6 +16,14 @@ import synthgrad
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
+
+
+def save_weights(layer2, layer3, ts):
+    template = os.path.join('progress/%d_%s_%s.npy')
+    np.save(template % (ts, 'l2', 'w'), layer2.w)
+    np.save(template % (ts, 'l2', 'b'), layer2.b)
+    np.save(template % (ts, 'l3', 'w'), layer3.w)
+    np.save(template % (ts, 'l3', 'b'), layer3.b)
 
 
 class Sender(threading.Thread):
@@ -114,6 +123,10 @@ def train_forever(q):
             layer2.descend(learning_rate)
 
             send_q.put((index, x, partials2))
+
+            now = int(time.time())
+            if now % 100 == 0:
+                save_weights(layer2, layer3, now)
         mse = sum_squares / float(num_examples)
         elapsed = time.time() - start
         print "MSE %.06f; took %.1f seconds" % (mse, elapsed)

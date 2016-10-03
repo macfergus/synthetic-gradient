@@ -1,4 +1,5 @@
 import argparse
+import os
 import Queue
 import random
 import sys
@@ -9,6 +10,12 @@ import sgd
 import synthgrad
 
 import numpy as np
+
+
+def save_weights(layer1, ts):
+    template = os.path.join('progress/%d_%s_%s.npy')
+    np.save(template % (ts, 'l1', 'w'), layer1.w)
+    np.save(template % (ts, 'l1', 'b'), layer1.b)
 
 
 class Sender(threading.Thread):
@@ -96,6 +103,10 @@ def main():
                     layer1.backprop(gradient)
                     layer1.descend(args.learning_rate)
                     minibatch = []
+
+                    now = int(time.time())
+                    if now % 100 == 0:
+                        save_weights(layer1, now)
             elapsed = time.time() - start
             print ' complete (%.1f seconds).' % (elapsed,)
     finally:
