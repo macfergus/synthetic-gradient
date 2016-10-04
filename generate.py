@@ -40,6 +40,6 @@ def sample(n):
 
 if __name__ == '__main__':
     draw('target.png')
-    #X, y = sample(200000)
-    #np.save('x.npy', X)
-    #np.save('y.npy', y)
+    X, y = sample(200000)
+    np.save('x.npy', X)
+    np.save('y.npy', y)
